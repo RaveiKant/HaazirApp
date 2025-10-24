@@ -27,7 +27,7 @@ A build-ready specification for the **Haazir Partner** application. This README 
 1. **OTP Sign-in** (Phone only). Function seeds `partners/{uid}` with `onboardingStep: "ENTER_NAME"`, `kyc.status: "PENDING"`, `isOnline: false`, empty `services`.
 2. **Enter Name** → save → `onboardingStep: "SELECT_SERVICES"`.
 3. **Select Services** from admin catalogue (+ optional personal prices for admin view) → save → `onboardingStep: "PENDING_KYC"`.
-4. **Admin KYC**: admin uploads selfie & Aadhaar (Storage, admin-only) → sets `kyc.status: "VERIFIED"`.
+4. **Admin KYC**: admin uploads selfie & Aadhaar (Storage, admin-only), **adds/edits `description`** (short bio/service summary), and sets `kyc.status: "VERIFIED"`.
 5. **Ready**: trigger flips `onboardingStep: "READY"`. Online toggle becomes enabled.
 
 ### B) KYC-Approved Partner (Job Flow)
@@ -88,6 +88,7 @@ onboardingStep: "ENTER_NAME" | "SELECT_SERVICES" | "PENDING_KYC" | "READY",
 kyc: { status: "PENDING" | "VERIFIED" | "REJECTED", verifiedAt?, verifiedBy?, aadhaarLast4?, docRefId?, selfieUrl? },
 services: [serviceId,...],
 partnerPrices: { [serviceId]: number },  // admin reference only
+**description: string,                  // admin-maintained profile blurb**
 isOnline: boolean,
 _geofire: { geohash, lat, lng },
 ratingAvg: number, ratingCnt: number,
@@ -134,6 +135,7 @@ partners/{id}/reviews/{jobId} → { stars, comment, ratedAt, serviceId }
 ## 6) Security Rules (Essentials)
 
 * Partner may update **only**: `name`, `services`, `partnerPrices`, `isOnline`, `_geofire`, `onboardingStep`, `photoUrl`, `updatedAt`.
+* **Admin-only field**: `description` (partner cannot write).
 * Partner **cannot** write: `kyc.*`, `ratingAvg`, `ratingCnt`, earnings or OTP fields.
 * Jobs: partner reads only jobs where `partnerId == uid`. State transitions (ACCEPT/START/COMPLETE) go via **callable Functions**.
 * Storage `/kyc/{uid}/...` → admins only. `/avatars/{uid}/...` → partner write, public read (optional).
@@ -227,6 +229,13 @@ completeJob({ jobId, otp })    // state must be IN_PROGRESS
 * [ ] Rules block partner from editing KYC, ratings, earnings, OTP fields.
 
 ---
+
+## Admin-only Description Field (New)
+
+* **Field:** `partners/{uid}.description` (string).
+* **Set by:** Admin during KYC (and editable later by admin only).
+* **Use:** Shown to users on partner cards/profile (user app); read-only in partner app.
+* **Rules:** Partner cannot write this field; admin can.
 
 ## 15) Future Extensions (Non-Blocking)
 
