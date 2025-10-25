@@ -211,3 +211,141 @@ A build-ready specification for the **Haazir User** web app. This README capture
 ---
 
 **Status:** Spec complete. Safe to implement User web app for v1 POC.
+
+---
+
+## 🔄 SYNC UPDATE — Payment & State Flow (Aligned with User App v1)
+
+### Updated Job State Machine
+
+```
+SEARCHING → ASSIGNED → EN_ROUTE → (Start OTP) → IN_PROGRESS → (Finish OTP) → AWAITING_PAYMENT → COMPLETED
+                               └→ CANCELLED (by user before IN_PROGRESS)
+SEARCHING → (no accept after rounds) → FAILED
+```
+
+* **Start OTP**: required to move EN_ROUTE → IN_PROGRESS.
+* **Finish OTP**: required to move IN_PROGRESS → AWAITING_PAYMENT.
+* **Payment**: UPI (QR on partner app, manual confirm in v1) **or** COD → then **COMPLETED**.
+
+### Partner Payment Screen (v1)
+
+* After **Finish OTP** succeeds, navigate to **Payment** screen.
+* Show **amount due** and two CTAs:
+
+  * **UPI (recommended)** → render UPI **QR** (built from deeplink `upi://pay?...`) + “Open UPI app”. After user pays, partner taps **Mark Paid** → server `confirmPayment` callable.
+  * **Cash (COD)** → partner taps **Cash collected** → server `confirmPayment` callable.
+* On success: toast + navigate to **Job Completed**.
+
+### Config (admin-managed)
+
+`/config/payments`
+
+```json
+{
+  "receiverMode": "MERCHANT",        // or "PARTNER"
+  "merchant": { "vpa": "haazir@icici", "name": "Haazir Services" },
+  "upiTimeoutSec": 180,
+  "allowCOD": true
+}
+```
+
+### Cloud Functions (additions)
+
+* `completeJob({ jobId, otp })` → verifies Finish OTP → sets `status: "AWAITING_PAYMENT"`, primes `payment` block.
+* `confirmPayment({ jobId, method })` → **only when** `status == AWAITING_PAYMENT` and caller is assigned partner:
+
+  * Sets `payment.method = "UPI" | "COD"`, `payment.status = "PAID"`, `payment.collectedAt = now`, and `status = "COMPLETED"`.
+
+### Rules (essentials)
+
+* Partner **cannot** set `payment.status = PAID` via client writes; must use `confirmPayment` callable.
+* Lock `amountDue`, `receiverVPA`, OTP hashes from client edits.
+
+### Minimal Client Calls (new)
+
+```ts
+// Finish → AWAITING_PAYMENT
+await httpsCallable(functions, "completeJob")({ jobId, otp });
+
+// Confirm payment (UPI manual or COD)
+await httpsCallable(functions, "confirmPayment")({ jobId, method: "UPI" });
+// or
+await httpsCallable(functions, "confirmPayment")({ jobId, method: "COD" });
+```
+
+### QA Checklist — Added
+
+* Finish OTP moves job to **AWAITING_PAYMENT**.
+* **UPI QR** renders; “Mark Paid” completes job with `payment.method = "UPI"`.
+* **COD** → “Cash collected” completes job with `payment.method = "COD"`.
+* Rules reject payment confirmation if caller isn’t the assigned partner or state ≠ AWAITING_PAYMENT.
+
+---
+
+## 🔄 SYNC UPDATE — Payment & State Flow (Aligned with User App v1)
+
+### Updated Job State Machine
+
+```
+SEARCHING → ASSIGNED → EN_ROUTE → (Start OTP) → IN_PROGRESS → (Finish OTP) → AWAITING_PAYMENT → COMPLETED
+                               └→ CANCELLED (by user before IN_PROGRESS)
+SEARCHING → (no accept after rounds) → FAILED
+```
+
+* **Start OTP**: required to move EN_ROUTE → IN_PROGRESS.
+* **Finish OTP**: required to move IN_PROGRESS → AWAITING_PAYMENT.
+* **Payment**: UPI (QR on partner app, manual confirm in v1) **or** COD → then **COMPLETED**.
+
+### Partner Payment Screen (v1)
+
+* After **Finish OTP** succeeds, navigate to **Payment** screen.
+* Show **amount due** and two CTAs:
+
+  * **UPI (recommended)** → render UPI **QR** (built from deeplink `upi://pay?...`) + “Open UPI app”. After user pays, partner taps **Mark Paid** → server `confirmPayment` callable.
+  * **Cash (COD)** → partner taps **Cash collected** → server `confirmPayment` callable.
+* On success: toast + navigate to **Job Completed**.
+
+### Config (admin-managed)
+
+`/config/payments`
+
+```json
+{
+  "receiverMode": "MERCHANT",        // or "PARTNER"
+  "merchant": { "vpa": "haazir@icici", "name": "Haazir Services" },
+  "upiTimeoutSec": 180,
+  "allowCOD": true
+}
+```
+
+### Cloud Functions (additions/confirm)
+
+* `completeJob({ jobId, otp })` → verifies Finish OTP → sets `status: "AWAITING_PAYMENT"`, primes `payment` block.
+* `confirmPayment({ jobId, method })` → **only when** `status == AWAITING_PAYMENT` and caller is assigned partner:
+
+  * Sets `payment.method = "UPI" | "COD"`, `payment.status = "PAID"`, `payment.collectedAt = now`, and `status = "COMPLETED"`.
+
+### Rules (essentials)
+
+* Partner **cannot** set `payment.status = PAID` via client writes; must use `confirmPayment` callable.
+* Lock `amountDue`, `receiverVPA`, OTP hashes from client edits.
+
+### Minimal Client Calls (new)
+
+```ts
+// Finish → AWAITING_PAYMENT
+await httpsCallable(functions, "completeJob")({ jobId, otp });
+
+// Confirm payment (UPI manual or COD)
+await httpsCallable(functions, "confirmPayment")({ jobId, method: "UPI" });
+// or
+await httpsCallable(functions, "confirmPayment")({ jobId, method: "COD" });
+```
+
+### QA Checklist — Added
+
+* Finish OTP moves job to **AWAITING_PAYMENT**.
+* **UPI QR** renders; “Mark Paid” completes job with `payment.method = "UPI"`.
+* **COD** → “Cash collected” completes job with `payment.method = "COD"`.
+* Rules reject payment confirmation if caller isn’t the assigned partner or state ≠ AWAITING_PAYMENT.
